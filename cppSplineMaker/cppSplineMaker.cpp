@@ -18,6 +18,7 @@ typedef std::vector<std::vector<double>> splineCoeffVec;
 
 
 ptVec oglBase = {}, oglSpline = {};
+pt oglInterpPoint = {};
 
 void renderChartVector(ptVec& vecRef, double r, double g, double b, int width)
 {
@@ -57,7 +58,6 @@ void cbDisplay()
 {
 	glClear(GL_COLOR_BUFFER_BIT);
 
-
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
 
@@ -92,6 +92,9 @@ void cbDisplay()
 	//draw charts
 	renderChartVector(oglBase, 1, 0, 0, 1);
 	renderChartVector(oglSpline, 0, 1, 1, 2);
+
+	//draw interpolated point
+	drawCrossAtPoint(oglInterpPoint, xMin, yMin, xMax, yMax, 0, 0, 1, 1);
 
 	glutSwapBuffers();
 }
@@ -149,7 +152,7 @@ void makeCubSplineCoeffs(ptVec& inpDat, splineCoeffVec& coeffs)
 		cSetup[i].back() = 3 * (((inpDat[i + 2].y - inpDat[i + 1].y) / h[i + 2]) -
 			((inpDat[i + 1].y - inpDat[i].y) / h[i + 1]));
 
-		std::cout << " -  - Section" << i << " at " << i + 1 << ", " << i + 2 << "\n";
+		std::cout << " -  - Section " << i << " at " << i + 1 << ", " << i + 2 << "\n";
 
 		if (i - 1 >= 0)
 			cSetup[i][i - 1] = h[i + 1];
@@ -251,19 +254,40 @@ void calcSplinePoints(ptVec& inpDat, ptVec& outpDat, int nPoints)
 				break;
 			}
 		}
-		double cy = coeffs[0][ind] +
-			coeffs[1][ind] * (cx - inpDat[ind].x) +
-			coeffs[2][ind] * pow(cx - inpDat[ind].x, 2) +
-			coeffs[3][ind] * pow(cx - inpDat[ind].x, 3);
+		double cy = coeffs[0][ind] +						//a
+			coeffs[1][ind] * (cx - inpDat[ind].x) +			//b
+			coeffs[2][ind] * pow(cx - inpDat[ind].x, 2) +	//c
+			coeffs[3][ind] * pow(cx - inpDat[ind].x, 3);	//d	
 		outpDat.push_back({ cx,cy });
 	}
+}
+
+//calculate interpolated value
+void getSplineInterpol(const ptVec& inpDat, const splineCoeffVec coeffs, double x, double &y)
+{
+	//find spline section index
+	int ind = inpDat.size() - 1;
+	for (int j = 1; j < inpDat.size(); ++j)
+	{
+		if (inpDat[j].x >= x)
+		{
+			ind = j;
+			break;
+		}
+	}
+
+	//get y
+	y = coeffs[0][ind] +								//a
+		coeffs[1][ind] * (x - inpDat[ind].x) +			//b
+		coeffs[2][ind] * pow(x - inpDat[ind].x, 2) +	//c
+		coeffs[3][ind] * pow(x - inpDat[ind].x, 3);		//d	
 }
 
 int main(int argc, char** argv)
 {
 	ptVec inputData = {};
 	ptVec splineData = {};
-	makeRandomVector(100, inputData);
+	makeRandomVector(6, inputData);
 	calcSplinePoints(inputData, splineData, 1000);
 	std::cout << "+++ INPUT VECTOR +++\n";
 	for (pt& cpt : inputData)
@@ -276,6 +300,22 @@ int main(int argc, char** argv)
 	{
 		std::cout << cpt.x << "; " << cpt.y << ";\n";
 	}
+
+	//get random interp value
+	std::mt19937 gen(time(NULL));
+	std::uniform_real_distribution<double> xRnd(inputData.front().x, 
+												inputData.back().x);
+	pt intPt = {0,0};
+	intPt.x = xRnd(gen);
+	
+	splineCoeffVec coeffs = {};
+	makeCubSplineCoeffs(inputData, coeffs);
+
+	getSplineInterpol(inputData, coeffs, intPt.x, intPt.y);
+
+	std::cout << "Interpolated: x = " << intPt.x << "; y = " << intPt.y << "\n";
+
+	oglInterpPoint = intPt;
 
 	std::cout << "+++ RENDERING +++\n";
 	oglBase = inputData;
